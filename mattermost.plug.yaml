@@ -1,0 +1,15 @@
+name: mattermost
+functions:
+  savedPostsProvider:
+    path: ./mattermost.ts:savedPostsQueryProvider
+    events:
+      - query:mm-saved
+  unsavePostCommand:
+    path: ./mattermost.ts:unsavePostCommand
+    command:
+      name: "Unsave"
+      contexts:
+        - CommandLink
+  unsavePost:
+    path: ./mattermost.ts:unsavePost
+    env: server
