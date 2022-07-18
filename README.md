@@ -1,4 +1,4 @@
-# Mattermost plug for Mattermost
+# Mattermost plug for Silver Bullet
 Provides a `mm-saved` query provider (and maybe more in the future). Please follow the installation, configuration sections, and have a look at the example.
 
 ## Installation
