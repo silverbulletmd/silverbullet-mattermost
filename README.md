@@ -1,5 +1,5 @@
 # Mattermost plug for Silver Bullet
-Provides a `mm-saved` query provider (and maybe more in the future). Please follow the installation, configuration sections, and have a look at the example.
+This plug provides a few query providers to query data from some of the [Mattermost suite](https://www.mattermost.com) of products. Please follow the installation, configuration sections, and have a look at the example.
 
 ## Installation
 Open your `PLUGS` note in SilverBullet and add this plug to the list:
@@ -11,7 +11,7 @@ Open your `PLUGS` note in SilverBullet and add this plug to the list:
 Then run the `Plugs: Update` command and off you go!
 
 ## Configuration
-You need two bits of configuration to make this plug work. In `SETTINGS` provide the `mattermostUrl` and `mattermostDefaultTeam` settings, they default to the following:
+When using the `mm-saved` query provide, you need two bits of configuration to make this plug work. In `SETTINGS` provide the `mattermostUrl` and `mattermostDefaultTeam` settings, they default to the following:
 
     ```yaml
     mattermostUrl: https://community.mattermost.com
@@ -34,14 +34,23 @@ To make this look good, it's recommended you render your query results a templat
 
 Note that the `{[Unsaved]}` "button" when clicked, will unsave the post automatically 😎
 
+If you use the `mm-boards` query provider, you do not need any configuration of secrets.
+
 ## Query sources
 
 * `mm-saved` fetches (by default 15) saved posts in Mattermost
+* `mm-board` fetches all cards from a Mattermost board exposed via a public share URL (obtained via Share > Publish > Publish to Web > Copy Link) via an `url =` filter (see example below)
 
 ## Example
 
-Example uses (using the `template/mm-saved` template above):
+Example use of `mm-saved` (using the `template/mm-saved` template above):
 
     <!-- #query mm-saved order by updatedAt desc limit 5 render "template/mm-saved" -->
 
+    <!-- /query -->
+
+Example use of `mm-board`:
+
+    <!-- #query mm-board where url = "https://community.mattermost.com/plugins/focalboard/workspace/p33mj7xh4frntrtbxbp5xp1joy/shared/bbam1crdg6jn93qhcgiq8xbpk8a/vqnxrjaewnibrtnp8m38fswt63e?r=keadbck8m8oc84ng6ozhcqqcgpc" and team = "Server Platform" and quarter = "2022 Q3" select objective, title, status -->
+    
     <!-- /query -->
