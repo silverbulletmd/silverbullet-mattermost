@@ -14,6 +14,7 @@ import {
   getCursor,
   getText,
   navigate,
+  getCurrentPage,
 } from "@silverbulletmd/plugos-silverbullet-syscall/editor";
 import {
   invokeCommand,
@@ -195,8 +196,9 @@ export async function post2NoteCommand() {
   }
   const split = messageLink.split("pl/");
   const postID = split.length > 1 ? split[1] : split[0]; //not very fancy, but will do for most situations
+  const currentPage = await getCurrentPage();
   // get note name
-  const noteName = await prompt("Where should I store this message?", "Mattermost Note");
+  const noteName = await prompt("Where should I store this message?", currentPage);
   if (!noteName?.trim().length) {
     return await flashNotification("Name can't be blank", "error");
   }
