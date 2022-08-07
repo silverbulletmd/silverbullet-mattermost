@@ -13,3 +13,10 @@ functions:
   unsavePost:
     path: ./mattermost.ts:unsavePost
     env: server
+  post2NoteCommand:
+    path: ./mattermost.ts:post2NoteCommand
+    command:
+      name: "Convert post to note"
+  post2Note:
+    path: ./mattermost.ts:post2Note
+    env: server

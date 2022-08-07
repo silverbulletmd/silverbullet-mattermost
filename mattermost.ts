@@ -8,15 +8,19 @@ import { Post } from "@mattermost/types/lib/posts";
 import { CachingClient4 } from "./mattermost_client";
 import { readSettings } from "@silverbulletmd/plugs/lib/settings_page";
 import { readSecrets } from "@silverbulletmd/plugs/lib/secrets_page";
-import { flashNotification } from "@silverbulletmd/plugos-silverbullet-syscall/editor";
+import { 
+  flashNotification,
+  prompt,
+  getCursor,
+  getText,
+  navigate,
+} from "@silverbulletmd/plugos-silverbullet-syscall/editor";
 import {
   invokeCommand,
   invokeFunction,
 } from "@silverbulletmd/plugos-silverbullet-syscall/system";
-import {
-  getCursor,
-  getText,
-} from "@silverbulletmd/plugos-silverbullet-syscall/editor";
+import { readPage, writePage} from "@silverbulletmd/plugos-silverbullet-syscall/space";
+import { PageMeta } from "@silverbulletmd/common/types";
 
 type AugmentedPost = Post & {
   // Dates we can use to filter
@@ -151,4 +155,52 @@ async function getMattermostClient(): Promise<{
   client.setUrl(config.mattermostUrl);
   client.setToken(token);
   return { client, config };
+}
+
+export async function post2Note(postID: string, noteName: string) {
+    // does note already exist?
+    let prevContent;
+    let noteExists = true;
+    try {
+      prevContent = await readPage(noteName);
+      noteExists = !!prevContent.text.length; //if it is empty is the same as unexistant
+    } catch {
+      noteExists = false;
+    }
+
+   // get post data
+   const {client, config} = await getMattermostClient();
+   let postContent;
+   try {
+     console.log(`requesting post ${postID}`);
+     postContent = await client.getPost(postID);
+   } catch (e) {
+     console.log(`Unable to retrieve post contents: ${e.message}`);
+     console.log(e);
+     throw new Error("Couldn't retrieve post contents");
+   }
+   // write note
+   const finalNote = noteExists ? `${prevContent!.text}\n${postContent.message}` : postContent.message;
+   await writePage(noteName, finalNote);
+   // navigate to note
+   const pos = noteExists ? prevContent?.text.length : 0;
+   return pos;
+}
+
+export async function post2NoteCommand() {
+  // get post id from permalink, it should be a post id or a permalink
+  const messageLink = await prompt("Go to your mattermost instance and copy the message link, paste it here:");
+  if (!messageLink?.trim().length) {
+    return await flashNotification("Link can't be blank!", "error");
+  }
+  const split = messageLink.split("pl/");
+  const postID = split.length > 1 ? split[1] : split[0]; //not very fancy, but will do for most situations
+  // get note name
+  const noteName = await prompt("Where should I store this message?", "Mattermost Note");
+  if (!noteName?.trim().length) {
+    return await flashNotification("Name can't be blank", "error");
+  }
+
+  const pos = await invokeFunction('server', "post2Note", postID, noteName);
+  return await navigate(noteName, pos);
 }
