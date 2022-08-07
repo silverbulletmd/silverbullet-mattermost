@@ -1,22 +1,26 @@
 name: mattermost
 functions:
   savedPostsProvider:
-    path: ./mattermost.ts:savedPostsQueryProvider
+    path: ./channels.ts:savedPostsQueryProvider
     events:
       - query:mm-saved
   unsavePostCommand:
-    path: ./mattermost.ts:unsavePostCommand
+    path: ./channels.ts:unsavePostCommand
     command:
       name: "Unsave"
       contexts:
         - CommandLink
   unsavePost:
-    path: ./mattermost.ts:unsavePost
+    path: ./channels.ts:unsavePost
     env: server
   post2NoteCommand:
-    path: ./mattermost.ts:post2NoteCommand
+    path: ./channels.ts:post2NoteCommand
     command:
       name: "Convert post to note"
   post2Note:
-    path: ./mattermost.ts:post2Note
+    path: ./channels.ts:post2Note
     env: server
+  boardsQueryProvider:
+    path: ./boards.ts:boardsQueryProvider
+    events:
+      - query:mm-board
