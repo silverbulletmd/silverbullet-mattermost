@@ -21,7 +21,6 @@ import {
   invokeFunction,
 } from "@silverbulletmd/plugos-silverbullet-syscall/system";
 import { readPage, writePage} from "@silverbulletmd/plugos-silverbullet-syscall/space";
-import { PageMeta } from "@silverbulletmd/common/types";
 
 type AugmentedPost = Post & {
   // Dates we can use to filter
@@ -29,6 +28,8 @@ type AugmentedPost = Post & {
   updatedAt: string;
   editedAt: string;
 };
+
+const INSERT_AT_END = -1;
 
 // https://community.mattermost.com/private-core/pl/rbp7a7jtr3f89nzsefo6ftqt3o
 
@@ -158,7 +159,7 @@ async function getMattermostClient(): Promise<{
   return { client, config };
 }
 
-export async function post2Note(postID: string, noteName: string) {
+export async function post2Note(postID: string, noteName: string, insertAt: number) {
     // does note already exist?
     let prevContent;
     let noteExists = true;
@@ -181,7 +182,14 @@ export async function post2Note(postID: string, noteName: string) {
      throw new Error("Couldn't retrieve post contents");
    }
    // write note
-   const finalNote = noteExists ? `${prevContent!.text}\n${postContent.message}` : postContent.message;
+   let finalNote: string;
+   if (!noteExists) {
+    finalNote = postContent.message;
+   } else if (insertAt !== INSERT_AT_END) {
+    finalNote = `${prevContent.text.slice(0,insertAt)}${postContent.message}${prevContent.text.slice(insertAt)}`;
+   } else {
+    finalNote = `${prevContent!.text}\n${postContent.message}`;
+   }
    await writePage(noteName, finalNote);
    // navigate to note
    const pos = noteExists ? prevContent?.text.length : 0;
@@ -191,18 +199,28 @@ export async function post2Note(postID: string, noteName: string) {
 export async function post2NoteCommand() {
   // get post id from permalink, it should be a post id or a permalink
   const messageLink = await prompt("Go to your mattermost instance and copy the message link, paste it here:");
-  if (!messageLink?.trim().length) {
+  if (typeof messageLink === 'undefined') {
+    return; //user cancelled
+  } else if (!messageLink?.trim().length) {
     return await flashNotification("Link can't be blank!", "error");
   }
+  // since we accept permalink urls, we try to split the post ID
+  // usually it is like "https://server/team/pl/postID
+  // if there is no `pl/` we'll try to assume it is a postID
   const split = messageLink.split("pl/");
   const postID = split.length > 1 ? split[1] : split[0]; //not very fancy, but will do for most situations
+  if (postID.length != 26) {
+    return await flashNotification("Message link doesn't seem to contain a valid post id");
+  }
   const currentPage = await getCurrentPage();
   // get note name
   const noteName = await prompt("Where should I store this message?", currentPage);
-  if (!noteName?.trim().length) {
+  if (typeof noteName === 'undefined') {
+    return; //user cancelled
+  } else if (!noteName?.trim().length) {
     return await flashNotification("Name can't be blank", "error");
   }
-
-  const pos = await invokeFunction('server', "post2Note", postID, noteName);
+  const insertAt = noteName === currentPage ? await getCursor() : INSERT_AT_END;
+  const pos = await invokeFunction('server', "post2Note", postID, noteName, insertAt);
   return await navigate(noteName, pos);
 }
