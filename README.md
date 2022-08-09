@@ -41,6 +41,10 @@ If you use the `mm-boards` query provider, you do not need any configuration of 
 * `mm-saved` fetches (by default 15) saved posts in Mattermost
 * `mm-board` fetches all cards from a Mattermost board exposed via a public share URL (obtained via Share > Publish > Publish to Web > Copy Link) via an `url =` filter (see example below)
 
+## Commands
+
+* `Convert post to note` fetches a post by passing its permalink and adds it to a note. If the note doesn't exist, it creates a new one.
+
 ## Example
 
 Example use of `mm-saved` (using the `template/mm-saved` template above):

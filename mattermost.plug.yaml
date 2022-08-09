@@ -13,6 +13,13 @@ functions:
   unsavePost:
     path: ./channels.ts:unsavePost
     env: server
+  post2NoteCommand:
+    path: ./channels.ts:post2NoteCommand
+    command:
+      name: "Convert post to note"
+  post2Note:
+    path: ./channels.ts:post2Note
+    env: server
   boardsQueryProvider:
     path: ./boards.ts:boardsQueryProvider
     events:
