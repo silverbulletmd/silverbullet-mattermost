@@ -10,7 +10,8 @@
     "@mattermost/client": "^7.0.0",
     "@mattermost/types": "^7.0.0",
     "@silverbulletmd/plugos-silverbullet-syscall": "^0.0.24",
-    "@silverbulletmd/plugs": "^0.0.24"
+    "@silverbulletmd/plugs": "^0.0.24",
+    "escape-string-regexp": "^5.0.0"
   },
   "devDependencies": {
     "@plugos/plugos": "^0.0.24"

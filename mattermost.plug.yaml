@@ -17,6 +17,14 @@ functions:
     path: ./channels.ts:post2NoteCommand
     command:
       name: "Convert post to note"
+  postUnfurlOptions:
+    path: ./channels.ts:unfurlOptions
+    events: 
+      - unfurl:options
+  postUnfurl:
+    path: ./channels.ts:unfurl
+    events: 
+      - unfurl:mattermost-unfurl
   post2Note:
     path: ./channels.ts:post2Note
     env: server

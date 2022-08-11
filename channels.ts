@@ -1,4 +1,5 @@
 import { Client4 } from "@mattermost/client";
+import escapeStringRegexp from "escape-string-regexp";
 import {
   applyQuery,
   QueryProviderEvent,
@@ -159,6 +160,26 @@ async function getMattermostClient(): Promise<{
   return { client, config };
 }
 
+async function getFormattedPostContent(postID: string) {
+  // get post data
+  const {client, config} = await getMattermostClient();
+  let postContent;
+  try {
+    postContent = await client.getPost(postID);
+  } catch (e) {
+    console.log(`Unable to retrieve post contents: ${e.message}`);
+    throw new Error("Couldn't retrieve post contents");
+  }
+  try {
+    const user = await client.getUser(postContent.user_id);
+    const channel = await client.getChannel(postContent.channel_id);
+    const team = await client.getTeam(channel.team_id);
+    return `[${user.username}@${channel.display_name}](${config.mattermostUrl}/${team.name}/pl/${postID}):\n${postContent.message}`;
+  } catch (e) {
+    throw new Error("Unable to get metadata for post");
+  }
+}
+
 export async function post2Note(postID: string, noteName: string, insertAt: number) {
     // does note already exist?
     let prevContent;
@@ -170,30 +191,28 @@ export async function post2Note(postID: string, noteName: string, insertAt: numb
       noteExists = false;
     }
 
-   // get post data
-   const {client, config} = await getMattermostClient();
-   let postContent;
-   try {
-     console.log(`requesting post ${postID}`);
-     postContent = await client.getPost(postID);
-   } catch (e) {
-     console.log(`Unable to retrieve post contents: ${e.message}`);
-     console.log(e);
-     throw new Error("Couldn't retrieve post contents");
-   }
+   const postContent = await getFormattedPostContent(postID);
    // write note
    let finalNote: string;
    if (!noteExists) {
-    finalNote = postContent.message;
+    finalNote = postContent;
    } else if (insertAt !== INSERT_AT_END) {
-    finalNote = `${prevContent.text.slice(0,insertAt)}${postContent.message}${prevContent.text.slice(insertAt)}`;
+    finalNote = `${prevContent.text.slice(0,insertAt)}${postContent}${prevContent.text.slice(insertAt)}`;
    } else {
-    finalNote = `${prevContent!.text}\n${postContent.message}`;
+    finalNote = `${prevContent!.text}\n${postContent}`;
    }
    await writePage(noteName, finalNote);
    // navigate to note
    const pos = noteExists ? prevContent?.text.length : 0;
    return pos;
+}
+
+function getPostID(permalink: string):string {
+  // since we accept permalink urls, we try to split the post ID
+  // usually it is like "https://server/team/pl/postID
+  // if there is no `pl/` we'll try to assume it is a postID
+  const split = permalink.split("pl/");
+  return split.length > 1 ? split[1] : split[0]; //not very fancy, but will do for most situations
 }
 
 export async function post2NoteCommand() {
@@ -204,11 +223,7 @@ export async function post2NoteCommand() {
   } else if (!messageLink?.trim().length) {
     return await flashNotification("Link can't be blank!", "error");
   }
-  // since we accept permalink urls, we try to split the post ID
-  // usually it is like "https://server/team/pl/postID
-  // if there is no `pl/` we'll try to assume it is a postID
-  const split = messageLink.split("pl/");
-  const postID = split.length > 1 ? split[1] : split[0]; //not very fancy, but will do for most situations
+ const postID = getPostID(messageLink);
   if (postID.length != 26) {
     return await flashNotification("Message link doesn't seem to contain a valid post id");
   }
@@ -223,4 +238,26 @@ export async function post2NoteCommand() {
   const insertAt = noteName === currentPage ? await getCursor() : INSERT_AT_END;
   const pos = await invokeFunction('server', "post2Note", postID, noteName, insertAt);
   return await navigate(noteName, pos);
+}
+
+export async function unfurl(permalink: string) {
+  const postID = getPostID(permalink);
+  if (postID.length != 26) {
+    throw new Error("Link doesn't seem to contain a valid post id");
+  }
+  return await getFormattedPostContent(postID);
+}
+
+export async function unfurlOptions(url: string) {
+  let config = await readSettings({
+    mattermostUrl: "https://community.mattermost.com",
+  });
+  const safeMattermostUrl = escapeStringRegexp(config.mattermostUrl);
+  const regex = new RegExp(`${safeMattermostUrl}\/[^\/]+\/pl\/[^\/]+`);
+  if (regex.exec(url)) {
+    return [{ id: "mattermost-unfurl", name: "Permalink content" }];
+  } else {
+   console.log(`couldn't match against: ${regex.source}`);
+   return [];
+  }
 }
