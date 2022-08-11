@@ -44,6 +44,7 @@ If you use the `mm-boards` query provider, you do not need any configuration of 
 ## Commands
 
 * `Convert post to note` fetches a post by passing its permalink and adds it to a note. If the note doesn't exist, it creates a new one.
+* `Unfurl: permalink` available while positioning the caret on top of a mattermost permalink related to the configured url, will fetch the post contents.
 
 ## Example
 
