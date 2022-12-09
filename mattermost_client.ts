@@ -1,13 +1,10 @@
-import { Client4 } from "@mattermost/client";
-import { ServerChannel } from "@mattermost/types/lib/channels";
-import { UserProfile } from "@mattermost/types/lib/users";
-import { Team } from "@mattermost/types/lib/teams";
+import { Client4 } from "./deps.ts";
 
 export class CachingClient4 {
-  constructor(public client: Client4) { }
+  constructor(public client: Client4) {}
 
-  private channelCache = new Map<string, ServerChannel>();
-  async getChannelCached(channelId: string): Promise<ServerChannel> {
+  private channelCache = new Map<string, any>();
+  async getChannelCached(channelId: string): Promise<any> {
     let channel = this.channelCache.get(channelId);
     if (channel) {
       return channel;
@@ -17,8 +14,8 @@ export class CachingClient4 {
     return channel!;
   }
 
-  private teamCache = new Map<string, Team>();
-  async getTeamCached(teamId: string): Promise<Team> {
+  private teamCache = new Map<string, any>();
+  async getTeam(teamId: string): Promise<any> {
     let team = this.teamCache.get(teamId);
     if (team) {
       return team;
@@ -28,8 +25,25 @@ export class CachingClient4 {
     return team!;
   }
 
-  private userCache = new Map<string, UserProfile>();
-  async getUserCached(userId: string): Promise<UserProfile> {
+  async getMyTeams(): Promise<any[]> {
+    const teams = await this.client.getMyTeams();
+    for (const team of teams) {
+      this.teamCache.set(team.id, team);
+    }
+    return teams;
+  }
+
+  // Fetch all channels for all teams this user has access to
+  async getAllMyChannels(): Promise<any[]> {
+    const allTeams = await this.getMyTeams();
+    const allChannels = await Promise.all(
+      allTeams.map((team) => this.client.getMyChannels(team.id, false)),
+    );
+    return allChannels.flat();
+  }
+
+  private userCache = new Map<string, any>();
+  async getUserCached(userId: string): Promise<any> {
     let user = this.userCache.get(userId);
     if (user) {
       return user;

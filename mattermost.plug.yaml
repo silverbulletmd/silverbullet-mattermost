@@ -1,4 +1,8 @@
 name: mattermost
+imports:
+  - https://get.silverbullet.md/global.plug.json
+dependencies:
+  "https://esm.sh/@mattermost/client@7.4.0": "https://esm.sh/@mattermost/client@7.4.0"
 functions:
   savedPostsProvider:
     path: ./channels.ts:savedPostsQueryProvider
@@ -17,3 +21,26 @@ functions:
     path: ./boards.ts:boardsQueryProvider
     events:
       - query:mm-board
+  publishPostCommand:
+    path: ./channels.ts:publishPostCommand
+    command:
+      name: "Share: Mattermost: Post"
+  checkCredentialsCommand:
+    path: ./channels.ts:checkCredentialsCommand
+    command:
+      name: "Mattermost: Check Credentials"
+  checkCredentials:
+    path: ./channels.ts:checkCredentials
+    env: server
+  getAllChannels:
+    path: ./channels.ts:getAllChannels
+    env: server
+  createPost:
+    path: ./channels.ts:createPost
+    env: server
+  updatePost:
+    path: ./channels.ts:updatePost
+    env: server
+    events:
+      # For `Share: Publish` command
+      - share:mm-post

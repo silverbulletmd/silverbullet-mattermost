@@ -1,29 +1,36 @@
-import { Client4 } from "@mattermost/client";
+import { Client4 } from "./deps.ts";
+
+import { CachingClient4 } from "./mattermost_client.ts";
+import { readSecrets } from "$sb/lib/secrets_page.ts";
 import {
-  applyQuery,
-  QueryProviderEvent,
-} from "@silverbulletmd/plugs/query/engine";
-import { niceDate } from "@silverbulletmd/plugs/core/dates";
-import { Post } from "@mattermost/types/lib/posts";
-import { CachingClient4 } from "./mattermost_client";
-import { readSettings } from "@silverbulletmd/plugs/lib/settings_page";
-import { readSecrets } from "@silverbulletmd/plugs/lib/secrets_page";
-import { flashNotification } from "@silverbulletmd/plugos-silverbullet-syscall/editor";
+  extractFrontmatter,
+  prepareFrontmatterDispatch,
+} from "$sb/lib/frontmatter.ts";
+import { niceDate } from "$sb/lib/dates.ts";
+import { flashNotification } from "$sb/silverbullet-syscall/editor.ts";
+import type { PublishEvent, QueryProviderEvent } from "$sb/app_event.ts";
 import {
   invokeCommand,
   invokeFunction,
-} from "@silverbulletmd/plugos-silverbullet-syscall/system";
-import {
-  getCursor,
-  getText,
-} from "@silverbulletmd/plugos-silverbullet-syscall/editor";
+} from "$sb/silverbullet-syscall/system.ts";
+import { getCursor, getText } from "$sb/silverbullet-syscall/editor.ts";
 
-type AugmentedPost = Post & {
+import { applyQuery } from "$sb/lib/query.ts";
+import { readYamlPage } from "$sb/lib/yaml_page.ts";
+import {
+  editor,
+  markdown,
+  space,
+  system,
+} from "$sb/silverbullet-syscall/mod.ts";
+import { renderToText } from "$sb/lib/tree.ts";
+
+type AugmentedPost = {
   // Dates we can use to filter
   createdAt: string;
   updatedAt: string;
   editedAt: string;
-};
+} & any;
 
 // https://community.mattermost.com/private-core/pl/rbp7a7jtr3f89nzsefo6ftqt3o
 
@@ -31,12 +38,13 @@ function mattermostUrlForPost(
   url: string,
   teamName: string,
   postId: string,
-  desktop = false
+  desktop = false,
 ) {
   return `${
     // For a desktop URL let's replace `https://` with `mattermost://`
-    desktop ? url.replace("https://", "mattermost://") : url
-  }/${teamName}/pl/${postId}`;
+    desktop
+      ? url.replace("https://", "mattermost://")
+      : url}/${teamName}/pl/${postId}`;
 }
 
 function augmentPost(post: AugmentedPost) {
@@ -54,14 +62,21 @@ function augmentPost(post: AugmentedPost) {
 export async function savedPostsQueryProvider({
   query,
 }: QueryProviderEvent): Promise<any[]> {
-  let { client, config } = await getMattermostClient();
-  let cachingClient = new CachingClient4(client);
-  let me = await client.getMe();
-  let postCollection = await client.getFlaggedPosts(me.id);
+  const serverFilter = query.filter.find((f) => f.prop === "server");
+  if (!serverFilter) {
+    throw Error("No 'server' filter specified, this is mandatory");
+  }
+  const serverName = serverFilter.value;
+  const { client, config } = await getMattermostClientForServer(serverName);
+  const cachingClient = new CachingClient4(client);
+  const me = await client.getMe();
+  const postCollection = await client.getFlaggedPosts(me.id);
+
+  console.log("Got posts", postCollection);
 
   let savedPosts: AugmentedPost[] = [];
-  for (let order of postCollection.order) {
-    let post = postCollection.posts[order];
+  for (const order of postCollection.order) {
+    const post = postCollection.posts[order];
     augmentPost(post);
     savedPosts.push(post);
   }
@@ -74,10 +89,12 @@ export async function savedPostsQueryProvider({
   // Let's parallelize additional fetching of post details
   await Promise.all(
     savedPosts.map(async (savedPost) => {
-      let channel = await cachingClient.getChannelCached(savedPost.channel_id);
-      let teamName = config.mattermostDefaultTeam;
+      const channel = await cachingClient.getChannelCached(
+        savedPost.channel_id,
+      );
+      let teamName = config.defaultTeam!;
       if (channel.team_id) {
-        let team = await cachingClient.getTeamCached(channel.team_id);
+        const team = await cachingClient.getTeam(channel.team_id);
         teamName = team.name;
       }
       resultSavedPosts.push({
@@ -86,22 +103,30 @@ export async function savedPostsQueryProvider({
           .username,
         channelName: channel.display_name,
         teamName: teamName,
+        server: serverName,
         url: mattermostUrlForPost(client.url, teamName, savedPost.id, false),
         desktopUrl: mattermostUrlForPost(
           client.url,
           teamName,
           savedPost.id,
-          true
+          true,
         ),
       });
-    })
+    }),
   );
   resultSavedPosts = applyQuery(query, resultSavedPosts);
   return resultSavedPosts;
 }
 
 export async function unsavePostCommand() {
-  let text = await getText();
+  // Fetch server configs
+  const allSettings = (await readYamlPage("SETTINGS", ["yaml"])) || {};
+  if (!allSettings.mattermost) {
+    throw new Error(`No mattermost settings found`);
+  }
+  const mattermostServers: MattermostSettings = allSettings.mattermost;
+
+  const text = await getText();
   let startLinePos = await getCursor();
   while (startLinePos > 0 && text[startLinePos] !== "\n") {
     startLinePos--;
@@ -111,24 +136,33 @@ export async function unsavePostCommand() {
     endLinePos++;
   }
   const currentLine = text.substring(startLinePos, endLinePos);
-  let match = /\/pl\/(\w{10,})/.exec(currentLine);
+  const match = /(https:\/\/.+)\/pl\/(\w{10,})/.exec(currentLine);
   if (match) {
-    const postId = match[1];
+    const [_fullMatch, serverUrl, postId] = match;
 
-    await flashNotification("Unsaving post...");
-    await invokeFunction("server", "unsavePost", postId);
-    await invokeCommand("Materialized Queries: Update");
+    const rootServerUrl = serverUrl.split("/").slice(0, 3).join("/");
+    for (
+      const [serverName, serverConfig] of Object.entries(mattermostServers)
+    ) {
+      if (serverConfig.url === rootServerUrl) {
+        await flashNotification("Unsaving post...");
+        await invokeFunction("server", "unsavePost", serverName, postId);
+        await invokeCommand("Materialized Queries: Update");
+        return;
+      }
+    }
+    await flashNotification("Could not find server for post", "error");
   } else {
     await flashNotification("Could not find post in current line", "error");
   }
 }
 
-export async function unsavePost(postId: string) {
-  let { client } = await getMattermostClient();
-  let me = await client.getMe();
+export async function unsavePost(serverName: string, postId: string) {
+  const { client } = await getMattermostClientForServer(serverName);
+  const me = await client.getMe();
 
   console.log("Unsaving", me.id, postId);
-  let result = await client.deletePreferences(me.id, [
+  const result = await client.deletePreferences(me.id, [
     {
       user_id: me.id,
       category: "flagged_post",
@@ -138,17 +172,195 @@ export async function unsavePost(postId: string) {
   console.log("Done unsaving", result);
 }
 
-async function getMattermostClient(): Promise<{
+async function getMattermostClientForServer(serverName: string): Promise<{
   client: Client4;
-  config: { mattermostUrl: string; mattermostDefaultTeam: string };
+  config: ServerConfig;
 }> {
-  let config = await readSettings({
-    mattermostUrl: "https://community.mattermost.com",
-    mattermostDefaultTeam: "core",
+  // Fetch server configs
+  const allSettings = (await readYamlPage("SETTINGS", ["yaml"])) || {};
+  if (!allSettings.mattermost) {
+    throw new Error(`No mattermost settings found`);
+  }
+  const mattermostServers: MattermostSettings = allSettings.mattermost;
+
+  // Fetch auth tokens
+  const [mattermostSecrets]: ServerSecrets[] = await readSecrets([
+    "mattermost",
+  ]);
+  if (!mattermostSecrets) {
+    throw new Error(`No mattermost SECRETS found`);
+  }
+  const serverConfig = mattermostServers[serverName];
+  if (!serverConfig) {
+    throw new Error(`Server ${serverName} not found in mattermost settings`);
+  }
+
+  // Instantiate client
+  const client = new Client4();
+  client.setUrl(serverConfig.url);
+  client.setToken(mattermostSecrets[serverName]);
+  return { client, config: serverConfig };
+}
+
+type ServerConfig = {
+  url: string;
+  defaultTeam?: string;
+};
+type MattermostSettings = {
+  [serverName: string]: ServerConfig;
+};
+
+type ServerSecrets = {
+  [serverName: string]: string;
+};
+
+export async function publishPostCommand() {
+  const allSettings = (await readYamlPage("SETTINGS", ["yaml"])) || {};
+  if (!allSettings.mattermost) {
+    await flashNotification("No mattermost settings found", "error");
+    return;
+  }
+  const [mattermostSecrets]: ServerSecrets[] = await readSecrets([
+    "mattermost",
+  ]);
+  if (!mattermostSecrets) {
+    await flashNotification("No mattermost secrets found", "error");
+    return;
+  }
+
+  const servers: MattermostSettings = allSettings.mattermost;
+  const selectedServer = await editor.filterBox(
+    "Select server",
+    Object.keys(servers).map((name) => ({ name })),
+  );
+
+  if (!selectedServer) {
+    return;
+  }
+
+  const serverName = selectedServer.name;
+
+  const allChannels: any[] = await system.invokeFunction(
+    "server",
+    "getAllChannels",
+    serverName,
+  );
+  const selectedChannel = await editor.filterBox(
+    "Select channel",
+    allChannels.map((channel) => ({
+      id: channel.id,
+      name: channel.display_name,
+    })),
+    "Select the channel to publish to",
+  );
+
+  if (!selectedChannel) {
+    return;
+  }
+
+  const { id: channelId } = (selectedChannel as any);
+
+  // Prepare post text
+  const text = await getText();
+  const tree = await markdown.parseMarkdown(text);
+  let { $share } = extractFrontmatter(tree, ["$share"]);
+  if (!$share) {
+    $share = [];
+  }
+  // Text without the frontmatter
+  const cleanText = renderToText(tree);
+
+  const post = await system.invokeFunction(
+    "server",
+    "createPost",
+    serverName,
+    channelId,
+    cleanText,
+  );
+
+  const dispatchData = prepareFrontmatterDispatch(tree, {
+    $share: [...$share, `mm-post:${serverName}:${post.id}`],
   });
-  let [token] = await readSecrets(["mattermostToken"]);
-  let client = new Client4();
-  client.setUrl(config.mattermostUrl);
-  client.setToken(token);
-  return { client, config };
+
+  await editor.dispatch(dispatchData);
+}
+
+export async function getAllChannels(serverName: string) {
+  const { client } = await getMattermostClientForServer(serverName);
+  const cachingClient = new CachingClient4(client);
+
+  return cachingClient.getAllMyChannels();
+}
+
+export async function createPost(
+  serverName: string,
+  channelId: string,
+  message: string,
+): Promise<any> {
+  const { client } = await getMattermostClientForServer(serverName);
+  return client.createPost({
+    channel_id: channelId,
+    message,
+  });
+}
+
+export async function updatePost(
+  event: PublishEvent,
+) {
+  const [_prefix, serverName, postId] = event.uri.split(":");
+
+  const text = await space.readPage(event.name);
+  const tree = await markdown.parseMarkdown(text);
+  let { $share } = extractFrontmatter(tree, ["$share"]);
+  if (!$share) {
+    $share = [];
+  }
+  // Text without the frontmatter
+  const message = renderToText(tree);
+  const { client } = await getMattermostClientForServer(serverName);
+  await client.updatePost({
+    id: postId,
+    message,
+  });
+  return true;
+}
+
+export async function checkCredentialsCommand() {
+  const allSettings = (await readYamlPage("SETTINGS", ["yaml"])) || {};
+  if (!allSettings.mattermost) {
+    await flashNotification("No mattermost settings found", "error");
+    return;
+  }
+
+  const servers: MattermostSettings = allSettings.mattermost;
+  const selectedServer = await editor.filterBox(
+    "Select server",
+    Object.keys(servers).map((name) => ({ name })),
+  );
+
+  if (!selectedServer) {
+    return;
+  }
+
+  try {
+    const me = await system.invokeFunction(
+      "server",
+      "checkCredentials",
+      selectedServer.name,
+    );
+    await editor.flashNotification(`Authenticated as ${me.username}`);
+  } catch (e: any) {
+    await editor.flashNotification(
+      `Failed to authenticate: ${e.message}`,
+      "error",
+    );
+  }
+}
+
+// Server side
+export async function checkCredentials(
+  serverName: string,
+): Promise<any> {
+  const { client } = await getMattermostClientForServer(serverName);
+  return client.getMe();
 }

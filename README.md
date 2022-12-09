@@ -1,6 +1,8 @@
 # Mattermost plug for Silver Bullet
 This plug provides a few query providers to query data from some of the [Mattermost suite](https://www.mattermost.com) of products. Please follow the installation, configuration sections, and have a look at the example.
 
+Note: Boards integration is still WIP.
+
 ## Installation
 Open your `PLUGS` note in SilverBullet and add this plug to the list:
 
@@ -11,20 +13,28 @@ Open your `PLUGS` note in SilverBullet and add this plug to the list:
 Then run the `Plugs: Update` command and off you go!
 
 ## Configuration
-When using the `mm-saved` query provide, you need two bits of configuration to make this plug work. In `SETTINGS` provide the `mattermostUrl` and `mattermostDefaultTeam` settings, they default to the following:
+In `SETTINGS` provide the `mattermost` key with a `url` and `defaultTeam` for each server (you can name them arbitrarily):
 
     ```yaml
-    mattermostUrl: https://community.mattermost.com
-    mattermostDefaultTeam: core
+    mattermost:
+      community:
+        url: https://community.mattermost.com
+        defaultTeam: core
+      silverbullet:
+        url: https://silverbullet.cloud.mattermost.com
+        defaultTeam: main
     ```
 
-In `SECRETS` provide a Mattermost personal access token (or hijack one from your current session):
+In `SECRETS` provide a Mattermost personal access token (or hijack one from your current session) for each server:
 
     ```yaml
-    mattermostToken: your-token
+    mattermost:
+      community: 1234
+      silverbullet: 1234
     ```
 
-To make this look good, it's recommended you render your query results a template. Here is one to start with, you can keep it in e.g. `templates/mm-saved`:
+
+To make the `mm-saved` query results look good, it's recommended you render your query results a template. Here is one to start with, you can keep it in e.g. `templates/mm-saved`:
 
     [{{username}}]({{desktopUrl}}) in **{{channelName}}** at {{updatedAt}} {[Unsave]}:
 
@@ -34,23 +44,19 @@ To make this look good, it's recommended you render your query results a templat
 
 Note that the `{[Unsaved]}` "button" when clicked, will unsave the post automatically 😎
 
-If you use the `mm-boards` query provider, you do not need any configuration of secrets.
-
 ## Query sources
 
 * `mm-saved` fetches (by default 15) saved posts in Mattermost
-* `mm-board` fetches all cards from a Mattermost board exposed via a public share URL (obtained via Share > Publish > Publish to Web > Copy Link) via an `url =` filter (see example below)
+
+## Posting to a channel
+
+You can use the {[Share: Mattermost: Post]} command to publish the current page to a channel. You will be prompted to select the server and channel to post to. A `$share` key will be injected into frontmatter after the initial post. Subsequent post edits can be published via the standard {[Share: Publish]} command.
 
 ## Example
 
 Example use of `mm-saved` (using the `template/mm-saved` template above):
 
-    <!-- #query mm-saved order by updatedAt desc limit 5 render "template/mm-saved" -->
+    <!-- #query mm-saved where server = "community" order by updatedAt desc limit 5 render "template/mm-saved" -->
 
     <!-- /query -->
 
-Example use of `mm-board`:
-
-    <!-- #query mm-board where url = "https://community.mattermost.com/plugins/focalboard/workspace/p33mj7xh4frntrtbxbp5xp1joy/shared/bbam1crdg6jn93qhcgiq8xbpk8a/vqnxrjaewnibrtnp8m38fswt63e?r=keadbck8m8oc84ng6ozhcqqcgpc" and team = "Server Platform" and quarter = "2022 Q3" select objective, title, status -->
-    
-    <!-- /query -->

@@ -1,7 +1,5 @@
-import {
-  applyQuery,
-  QueryProviderEvent,
-} from "@silverbulletmd/plugs/query/engine";
+import { applyQuery } from "$sb/lib/query.ts";
+import { QueryProviderEvent } from "$sb/app_event.ts";
 
 async function fetchCardsFromSharedBoard(url: string): Promise<any[]> {
   let parsedUrl = new URL(url);
@@ -10,22 +8,27 @@ async function fetchCardsFromSharedBoard(url: string): Promise<any[]> {
   // Extract the workspace and blockId from the URL
   let [, , , , workspaceId, , blockId] = parsedUrl.pathname.split("/");
 
+  const apiUrl =
+    `${matterMostUrl}/plugins/focalboard/api/v1/workspaces/${workspaceId}/blocks/${blockId}/subtree?l=3&read_token=${readToken}`;
   let result = await fetch(
-    `${matterMostUrl}/plugins/focalboard/api/v1/workspaces/${workspaceId}/blocks/${blockId}/subtree?l=3&read_token=${readToken}`,
+    apiUrl,
     {
       headers: {
         // Without this, I get a CSRF error
         "x-requested-with": "XMLHttpRequest",
       },
-    }
+    },
   );
+  console.log("Got response", result.status, apiUrl);
+  console.log(await result.text());
+  return;
   let allBlocks = await result.json();
   let blockMap = new Map<string, any>();
   let cardProperties = new Map<string, any>();
   for (let block of allBlocks) {
     if (block.type === "board") {
       cardProperties = new Map(
-        block.fields.cardProperties.map((prop) => [prop.id, prop])
+        block.fields.cardProperties.map((prop) => [prop.id, prop]),
       );
       console.log("Card properties:", cardProperties);
     }
@@ -34,7 +37,7 @@ async function fetchCardsFromSharedBoard(url: string): Promise<any[]> {
   let allCards: any[] = [];
   for (let block of blockMap.values()) {
     if (block.type === "card") {
-      let card = {
+      let card: any = {
         id: block.id,
         title: block.title,
       };
@@ -42,7 +45,7 @@ async function fetchCardsFromSharedBoard(url: string): Promise<any[]> {
         let propLookup = cardProperties.get(key);
         if (propLookup) {
           let valueOption = propLookup.options.find(
-            (option) => option.id === value
+            (option: any) => option.id === value,
           );
           let propName = propLookup.name
             .toLowerCase()
