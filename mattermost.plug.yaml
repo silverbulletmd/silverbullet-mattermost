@@ -4,27 +4,41 @@ imports:
 dependencies:
   "https://esm.sh/@mattermost/client@7.4.0": "https://esm.sh/@mattermost/client@7.4.0"
 functions:
+  # Saved posts
   savedPostsProvider:
-    path: ./channels.ts:savedPostsQueryProvider
+    path: ./saved_posts.ts:savedPostsQueryProvider
     events:
       - query:mm-saved
   unsavePostCommand:
-    path: ./channels.ts:unsavePostCommand
+    path: ./saved_posts.ts:unsavePostCommand
     command:
       name: "Unsave"
       contexts:
         - CommandLink
   unsavePost:
-    path: ./channels.ts:unsavePost
+    path: ./saved_posts.ts:unsavePost
     env: server
-  boardsQueryProvider:
-    path: ./boards.ts:boardsQueryProvider
-    events:
-      - query:mm-board
+  # Post commands
+  loadPostCommand:
+    path: ./channels.ts:loadPostCommand
+    command:
+      name: "Share: Mattermost Post: Load"
+  postToPage:
+    path: ./channels.ts:postToPage
+    env: server
   publishPostCommand:
     path: ./channels.ts:publishPostCommand
     command:
-      name: "Share: Mattermost: Post"
+      name: "Share: Mattermost Post: Publish"
+  postUnfurlOptions:
+    path: ./channels.ts:unfurlOptions
+    events:
+      - unfurl:options
+  postUnfurl:
+    path: ./channels.ts:unfurl
+    events:
+      - unfurl:mattermost-unfurl
+  # Authentication
   checkCredentialsCommand:
     path: ./channels.ts:checkCredentialsCommand
     command:
@@ -32,6 +46,7 @@ functions:
   checkCredentials:
     path: ./channels.ts:checkCredentials
     env: server
+  # Server-side stuff
   getAllChannels:
     path: ./channels.ts:getAllChannels
     env: server
@@ -44,3 +59,9 @@ functions:
     events:
       # For `Share: Publish` command
       - share:mm-post
+
+  # Boards
+  boardsQueryProvider:
+    path: ./boards.ts:boardsQueryProvider
+    events:
+      - query:mm-board
