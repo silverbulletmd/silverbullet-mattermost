@@ -1,5 +1,5 @@
-# Mattermost plug for Silver Bullet
-This plug provides a few query providers to query data from some of the [Mattermost suite](https://www.mattermost.com) of products. Please follow the installation, configuration sections, and have a look at the example.
+# Mattermost for Silver Bullet
+This plug provides various integrations with the [Mattermost suite](https://www.mattermost.com) of products. Please follow the installation, configuration sections, and have a look at the example.
 
 Features:
 
@@ -41,7 +41,7 @@ In `SECRETS` provide a Mattermost personal access token (or hijack one from your
 
 ## Query sources
 
-* `mm-saved` fetches (by default 15) saved posts in Mattermost, you to add a `where server = "community"` (with server name) clause to your query to select the mattermost server to query.
+* `mm-saved` fetches (by default 15) saved posts in Mattermost, you need to add a `where server = "community"` (with server name) clause to your query to select the mattermost server to query.
 
 To make the `mm-saved` query results look good, it's recommended you render your query results a template. Here is one to start with, you can keep it in e.g. `templates/mm-saved`:
 
@@ -51,9 +51,7 @@ To make the `mm-saved` query results look good, it's recommended you render your
 
     ---
 
-Note that the `{[Unsaved]}` "button" when clicked, will unsave the post automatically 😎
-
-Known issue with Unsaved is that you need to physicall move your cursor to the line containing the post link (looking to fix this)
+Note that the `{[Unsave]}` button when clicked, will unsave the post automatically 😎
 
 Example use of `mm-saved` (using the `template/mm-saved` template above):
 
@@ -67,5 +65,5 @@ You can use the {[Share: Mattermost Post: Publish]} command to publish the curre
 
 ## Loading a post into SB
 
-Using the {[Share: Mattermost Post: Load]} command you can load an existing post into your space. All you need for this is to have the Mattermost authentication configured as described above. You will be prompted for a post permalink and a page to save it to. If you are the author of the page, the `$share` frontmatter will also be set up so you can change the page and push changes back into Mattermost.
+Using the {[Share: Mattermost Post: Load]} command you can load an existing post into your space. All you need for this is to have the Mattermost authentication configured as described above. You will be prompted for a post permalink and a page to save it to. If you are the author of the post, the `$share` frontmatter will also be set up so you can change the page and push changes back into Mattermost.
 
